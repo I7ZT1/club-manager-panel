@@ -10,19 +10,30 @@ from models.BIllingModel import BillingModel
 router = APIRouter(prefix="/payment", tags=["Платежи"])
 
 class PaymentRequest(BaseModel):
-    amount: float
-    currency: str
-    client_id: Optional[str] = None
+    rating: int  # рейтинг влияет на выбор карты. К примеру первые депозиты идут на карту помеченную как risk
+    amount: float # сумма депозита
+    currency: str # валюта депозита
+    settlement: bool # Указывает можно ли использовать внутреннюю платежную систему под названием settlement
+    club_id: int # id клуба
+    cards: bool # Указывает на то что если есть лимиты на карты, то сначала использовать их
+    crypto: bool # Указывает использовать криптовалюту
+    bank: str #  Добавляет фильтр по банку
+    billing_id: int # Использует определенную карту из биллинга или платежного провайдера
 
 class PaymentRequisites(BaseModel):
-    card_number: str
-    card_details: str
-    bank: str
-    amount: float
-    currency: str
-    billing_id: int
+    client_id: int # id клиента
+    card_number: str # номер карты
+    card_details: str # детали карты
+    bank: str # банк
+    amount: float # сумма
+    currency: str # валюта
+    billing_id: int # id биллинга
+    billing_status: str # статус биллинга исторично сложилось что может быть UUID
+    billing_usd: float # сумма в долларах
+    currency_rate: float # курс валюты
 
-@router.post("/get-requisites", response_model=PaymentRequisites)
+
+@router.post("/requisites", response_model=PaymentRequisites)
 async def get_payment_requisites(
     payment_data: PaymentRequest,
     session: AsyncSession = Depends(get_session)

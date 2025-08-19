@@ -1,7 +1,7 @@
 from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union, Literal
 from datetime import datetime
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 ModelType = TypeVar("ModelType")
@@ -174,13 +174,21 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         else:
             update_data = obj_in.dict(exclude_unset=True)
             
-        for field in update_data:
-            if field in update_data:
-                setattr(db_obj, field, update_data[field])
-                
-        session.add(db_obj)
+        stmt = (
+            update(self._model)
+            .where(self._model.id == obj_id)
+            .values(**update_data)
+            .execution_options(synchronize_session="fetch")  # обновит локальную сессию
+        )
+
+        await session.execute(stmt)
         await session.commit()
-        return db_obj
+
+        # Получим обновлённый объект из базы
+        result = await session.execute(
+            select(self._model).where(self._model.id == obj_id)
+        )
+        return result.scalar_one_or_none()
 
 
     async def delete(
@@ -190,3 +198,35 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         await session.delete(db_obj)
         await session.commit()
         return db_obj
+
+    async def create_or_update(
+        self,
+        session: AsyncSession,
+        obj_in: CreateSchemaType,
+        **unique_fields
+    ) -> ModelType:
+        """
+        Создает новую запись или обновляет существующую на основе уникальных полей.
+
+        Args:
+            session: Сессия базы данных
+            obj_in: Данные для создания/обновления
+            **unique_fields: Поля для поиска существующей записи
+
+        Returns:
+            Созданная или обновленная запись
+        """
+        # Ищем существующую запись по уникальным полям
+        existing_obj = await self.get(session, **unique_fields)
+
+        if existing_obj:
+            # Если запись существует, обновляем её
+            return await self.update(
+                session,
+                existing_obj.id,
+                obj_in=obj_in,
+                db_obj=existing_obj
+            )
+        else:
+            # Если записи нет, создаем новую
+            return await self.create(session, obj_in)

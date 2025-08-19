@@ -29,3 +29,4 @@ class BillingModel(Base):
     card_balance = Column(Float, default=0)
     clubs = Column(ARRAY(Integer), nullable=True)
     bank = Column(String, nullable=True)
+    risk = Column(Boolean, default=False) # TODO: Добавить поле в бд для отметки карты как рисковая
